@@ -1,5 +1,7 @@
 # falsify
 
+[![ci](https://github.com/wujiayue19160200073/falsify/actions/workflows/ci.yml/badge.svg)](https://github.com/wujiayue19160200073/falsify/actions/workflows/ci.yml)
+
 **你的测试是绿的。但它们是真的吗？**
 
 `falsify` 故意把你的代码改坏，然后看有没有人发现。如果没人发现，它会把

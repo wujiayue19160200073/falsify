@@ -1,5 +1,7 @@
 # falsify
 
+[![ci](https://github.com/wujiayue19160200073/falsify/actions/workflows/ci.yml/badge.svg)](https://github.com/wujiayue19160200073/falsify/actions/workflows/ci.yml)
+
 **Your tests are green. Are they real?**
 
 `falsify` breaks your code on purpose — then checks whether anything notices.
