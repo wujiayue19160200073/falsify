@@ -201,12 +201,19 @@ def _cmd_run(args) -> int:
 
         module = guess_module_name(root, path)
         test_target = find_tests(root, module)
-        if test_target.is_empty:
-            print(f"falsify: {rel}: no test file found, skipped", file=sys.stderr)
-            continue
 
         if args.test_cmd:
             cmd = args.test_cmd.split()
+        elif test_target.is_empty:
+            # Documented behaviour in discover.py: fall back to the full suite and
+            # say so. Skipping the file would hide the module from the report
+            # entirely, which reads as "nothing to fix" — the wrong conclusion.
+            print(
+                f"falsify: no test file imports {module}; running the full suite instead. "
+                "Narrow it with --test-cmd if that is slow.",
+                file=sys.stderr,
+            )
+            cmd = build_command(root, [])
         else:
             cmd = build_command(root, test_target.files)
 

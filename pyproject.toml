@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "falsify-mutants"
-version = "0.1.1"
+version = "0.1.2"
 description = "Mutation testing for the code you just changed. Find out which of your tests can actually fail."
 readme = "README.md"
 requires-python = ">=3.9"
