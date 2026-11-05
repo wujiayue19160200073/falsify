@@ -12,7 +12,9 @@ from falsify.runner import (
     back_up,
     check_baseline,
     evaluate,
+    explain_no_tests,
     restore_from_backup,
+    run_command,
 )
 
 SAMPLE = '''
@@ -99,13 +101,51 @@ class TestVerdicts(RunnerTestCase):
 
 class TestBaseline(RunnerTestCase):
     def test_green_baseline_passes(self):
-        ok, why = check_baseline(self.tmp.name, PASS_CMD, 20)
-        self.assertTrue(ok, why)
+        result = check_baseline(self.tmp.name, PASS_CMD, 20)
+        self.assertTrue(result.ok, result.detail)
+        self.assertFalse(result.no_tests)
 
     def test_red_baseline_is_refused(self):
-        ok, why = check_baseline(self.tmp.name, FAIL_CMD, 20)
-        self.assertFalse(ok)
-        self.assertTrue(why)
+        result = check_baseline(self.tmp.name, FAIL_CMD, 20)
+        self.assertFalse(result.ok)
+        self.assertTrue(result.detail)
+        self.assertFalse(result.no_tests)
+
+    def test_zero_tests_is_not_a_pass(self):
+        """A suite that collects nothing must never look green.
+
+        Python 3.12+ makes unittest exit 5 here, but 3.9 and 3.10 exit 0 while
+        still printing "Ran 0 tests". Trusting the exit code alone therefore
+        scores every mutant "survived" and reports 0% for a suite that never ran.
+        """
+        empty = os.path.join(self.tmp.name, "empty_suite")
+        os.makedirs(empty, exist_ok=True)
+        cmd = [sys.executable, "-m", "unittest", "discover", "-s", empty, "-t", empty]
+        result = check_baseline(self.tmp.name, cmd, 20)
+        self.assertFalse(result.ok)
+        self.assertTrue(result.no_tests, result.detail)
+
+    def test_zero_tests_is_reported_as_missing_tests_not_failing_tests(self):
+        """The two failures must not be collapsed into one message.
+
+        Telling someone "your tests fail" when no runner could find them sends
+        them to debug the wrong thing, in a tool whose entire job is judging tests.
+        """
+        cmd = [sys.executable, "-c", "print('Ran 0 tests in 0.000s')"]
+        result = check_baseline(self.tmp.name, cmd, 20)
+        self.assertTrue(result.no_tests)
+
+    def test_pytest_marker_is_recognised(self):
+        cmd = [sys.executable, "-c", "print('no tests ran in 0.01s')"]
+        self.assertTrue(check_baseline(self.tmp.name, cmd, 20).no_tests)
+
+    def test_explanation_names_the_missing_runner(self):
+        path = os.path.join(self.tmp.name, "test_pytest_style.py")
+        with open(path, "w", encoding="utf-8", newline="") as fh:
+            fh.write("def test_something():\n    assert True\n")
+        text = explain_no_tests([path])
+        self.assertTrue(text)
+        self.assertIn("--test-cmd", text)
 
 
 if __name__ == "__main__":

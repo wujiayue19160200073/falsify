@@ -124,7 +124,7 @@ def render_terminal(reports: list[Report], color: Optional[bool] = None, width: 
             if detailed >= detail_limit:
                 lines.append(
                     f"  {paint('SURVIVED', RED)}  {paint(m.id, BOLD)}  line {m.lineno}  "
-                    f"{paint(m.description.split('（')[0], DIM)}"
+                    f"{paint(m.description.split(' (')[0], DIM)}"
                 )
                 continue
             detailed += 1
@@ -148,28 +148,30 @@ def render_terminal(reports: list[Report], color: Optional[bool] = None, width: 
                 lines.append("")
                 if key and key in seen_suggestions:
                     lines.append(
-                        paint(f"    同一组输入（{call}）也能杀死这个变异体。", DIM)
+                        paint(f"    the same input ({call}) kills this one too.", DIM)
                     )
                 else:
-                    lines.append(paint("    你的测试从没试过这个输入：", YELLOW))
+                    lines.append(paint("    your tests never tried this input:", YELLOW))
                     lines.append(f"      {call}")
-                    lines.append(f"      原函数  →  {witness.orig_result}")
-                    lines.append(f"      变异后  →  {witness.mutant_result}")
+                    lines.append(f"      original  →  {witness.orig_result}")
+                    lines.append(f"      mutant    →  {witness.mutant_result}")
                     if suggestion:
                         if key:
                             seen_suggestions[key] = m.id
                         lines.append("")
-                        lines.append(paint("    补这一行就够了：", GREEN))
+                        lines.append(paint("    one line closes it:", GREEN))
                         for sline in suggestion.splitlines():
                             if sline.strip().startswith(("assert", "with ")):
                                 lines.append(f"      {paint(sline.strip(), GREEN)}")
             elif witness and witness.note:
-                lines.append(f"    {paint('反例搜索：' + witness.note, DIM)}")
+                lines.append(f"    {paint('counterexample search: ' + witness.note, DIM)}")
 
         if report.killed:
             ids = ", ".join(o.mutant.id for o in sorted(report.killed, key=lambda o: o.mutant.lineno))
             lines.append("")
-            lines.append(f"  {paint('KILLED', GREEN)}    {len(report.killed)} 个变异体被测试抓住  {paint(ids, DIM)}")
+            lines.append(
+                f"  {paint('KILLED', GREEN)}    {len(report.killed)} caught by your tests  {paint(ids, DIM)}"
+            )
 
         others = [o for o in report.outcomes if o.status in (TIMEOUT, ERROR)]
         for o in others:
@@ -179,23 +181,23 @@ def render_terminal(reports: list[Report], color: Optional[bool] = None, width: 
     lines.append("")
     lines.append(paint("  " + "─" * (width - 2), DIM))
     if total.score is None:
-        lines.append(paint("  没有任何变异体被评估。", YELLOW))
+        lines.append(paint("  no mutants were evaluated.", YELLOW))
     else:
         score = total.score
         if score >= 90:
-            tone, word = GREEN, "扎实"
+            tone, word = GREEN, "solid"
         elif score >= 70:
-            tone, word = YELLOW, "一般"
+            tone, word = YELLOW, "thin"
         else:
-            tone, word = RED, "很弱"
+            tone, word = RED, "blind"
         lines.append(
-            f"  {paint(f'{score:.0f}%', tone, BOLD)} 变异分数  "
-            f"{paint(f'({len(total.killed)}/{total.scored} 被杀死)', DIM)}  ·  {word}"
+            f"  {paint(f'{score:.0f}%', tone, BOLD)} mutation score  "
+            f"{paint(f'({len(total.killed)}/{total.scored} killed)', DIM)}  ·  {word}"
         )
         if total.survived:
             lines.append(
                 paint(
-                    f"  {total.blind_spot:.0f}% 的行为改动，你的测试不会发现。",
+                    f"  {total.blind_spot:.0f}% of behaviour changes would pass your tests unnoticed.",
                     DIM,
                 )
             )
@@ -205,8 +207,8 @@ def render_terminal(reports: list[Report], color: Optional[bool] = None, width: 
                 lines.append("")
                 lines.append(
                     paint(
-                        f"  {len(total.survived)} 个存活变异体，"
-                        f"补 {len(keys)} 条断言就能全部覆盖。",
+                        f"  {len(total.survived)} survivors, "
+                        f"{len(keys)} assertions close every one of them.",
                         BOLD,
                     )
                 )
@@ -259,30 +261,30 @@ def render_markdown(reports: list[Report]) -> str:
     if total.score is None:
         return "falsify: no mutants were evaluated.\n"
 
-    verdict = "通过" if not total.survived else f"{len(total.survived)} 个变异体存活"
-    out.append(f"### falsify — 变异分数 {total.score:.0f}% · {verdict}")
+    verdict = "clean" if not total.survived else f"{len(total.survived)} survived"
+    out.append(f"### falsify — mutation score {total.score:.0f}% · {verdict}")
     out.append("")
     out.append(
-        f"{len(total.killed)}/{total.scored} 个故意注入的缺陷被测试抓住。"
-        f"剩下的意味着：这部分逻辑被改坏，CI 依然是绿的。"
+        f"{len(total.killed)}/{total.scored} injected defects were caught by the suite. "
+        f"The rest is logic that can be broken while CI stays green."
     )
 
     if total.survived:
         out.append("")
-        out.append("| 变异体 | 位置 | 改了什么 | 漏掉的输入 |")
+        out.append("| mutant | location | what changed | input your suite missed |")
         out.append("| --- | --- | --- | --- |")
         for r in reports:
             for o in sorted(r.survived, key=lambda x: (x.mutant.function, x.mutant.lineno)):
                 m = o.mutant
                 w = r.witnesses.get(m.id)
                 if w is None:
-                    call = "_未搜索_"
+                    call = "_not searched_"
                 elif w.kind in ("value", "exception"):
                     call = f"`{w.call_source(m.function)}`"
                 elif w.kind == "no_witness":
-                    call = "_试过，没找到_"
+                    call = "_searched, none found_"
                 else:
-                    call = "_该函数无法自动构造反例_"
+                    call = "_signature not searchable_"
                 before = m.original.strip().replace("|", "\\|")
                 after = m.replacement.strip().replace("|", "\\|")
                 out.append(
@@ -300,7 +302,7 @@ def render_markdown(reports: list[Report]) -> str:
         suggestions.append(suggestion)
     if suggestions:
         out.append("")
-        out.append("<details><summary>建议补的测试</summary>")
+        out.append("<details><summary>Tests that would close these gaps</summary>")
         out.append("")
         out.append("```python")
         out.append("\n\n".join(suggestions))

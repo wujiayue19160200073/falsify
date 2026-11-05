@@ -101,5 +101,43 @@ class TestEquivalence(unittest.TestCase):
         self.assertIn("apply_discount", find_functions(tree))
 
 
+SYMBOL_WORDS = {
+    ">=": "greater-or-equal",
+    "<=": "less-or-equal",
+    ">": "greater-than",
+    "<": "less-than",
+}
+
+COMPARE_SOURCE = '''
+def gate(a: float, b: float) -> bool:
+    return a < b or a <= b or a > b or a >= b
+'''
+
+
+class TestDescriptionsMatchBehaviour(unittest.TestCase):
+    """A description that contradicts the mutation is worse than no description.
+
+    The report prints `comparison >= → < (greater-or-equal became less-than)`.
+    If the parenthetical disagrees with the symbol, a reader who trusts the
+    explanation learns the wrong thing — and the entire product is the claim
+    that this report can be trusted.
+    """
+
+    def test_compare_descriptions_name_the_actual_replacement(self):
+        mutants = mutants_for_source(COMPARE_SOURCE, "gate", ["compare"])
+        self.assertTrue(mutants, "expected comparison mutants")
+        for mutant in mutants:
+            replacement = mutant.replacement.strip()
+            if replacement not in SYMBOL_WORDS:
+                continue
+            expected = SYMBOL_WORDS[replacement]
+            self.assertIn(
+                expected,
+                mutant.description,
+                f"{mutant.description!r} describes a mutation to {replacement!r}, "
+                f"which is {expected}",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -88,28 +88,28 @@ def _seg(source_lines: list[str], lineno: int, col: int, end_lineno: int, end_co
 # ---------------------------------------------------------------------------
 
 _COMPARE_FLIP = {
-    ast.Lt: (">=", "边界被放宽：小于变成了大于等于"),
-    ast.LtE: (">", "边界被收紧：小于等于变成了小于"),
-    ast.Gt: ("<=", "边界被放宽：大于变成了小于等于"),
-    ast.GtE: ("<", "边界被收紧：大于等于变成了大于"),
-    ast.Eq: ("!=", "相等判断被反转"),
-    ast.NotEq: ("==", "不等判断被反转"),
-    ast.In: ("not in", "成员判断被反转"),
-    ast.NotIn: ("in", "成员判断被反转"),
-    ast.Is: ("is not", "身份判断被反转"),
-    ast.IsNot: ("is", "身份判断被反转"),
+    ast.Lt: (">=", "less-than became greater-or-equal"),
+    ast.LtE: (">", "less-or-equal became greater-than"),
+    ast.Gt: ("<=", "greater-than became less-or-equal"),
+    ast.GtE: ("<", "greater-or-equal became less-than"),
+    ast.Eq: ("!=", "equality inverted"),
+    ast.NotEq: ("==", "inequality inverted"),
+    ast.In: ("not in", "membership inverted"),
+    ast.NotIn: ("in", "membership inverted"),
+    ast.Is: ("is not", "identity check inverted"),
+    ast.IsNot: ("is", "identity check inverted"),
 }
 
 _BINOP_FLIP = {
-    ast.Add: (ast.Sub, "-", "加变减"),
-    ast.Sub: (ast.Add, "+", "减变加"),
-    ast.Mult: (ast.Div, "/", "乘变除"),
-    ast.Div: (ast.Mult, "*", "除变乘"),
-    ast.FloorDiv: (ast.Mult, "*", "整除变乘"),
-    ast.Mod: (ast.Mult, "*", "取余变乘"),
+    ast.Add: (ast.Sub, "-", "add became subtract"),
+    ast.Sub: (ast.Add, "+", "subtract became add"),
+    ast.Mult: (ast.Div, "/", "multiply became divide"),
+    ast.Div: (ast.Mult, "*", "divide became multiply"),
+    ast.FloorDiv: (ast.Mult, "*", "floor-divide became multiply"),
+    ast.Mod: (ast.Mult, "*", "modulo became multiply"),
 }
 
-_BOOLOP_FLIP = {ast.And: (ast.Or, "or", "and 变 or"), ast.Or: (ast.And, "and", "or 变 and")}
+_BOOLOP_FLIP = {ast.And: (ast.Or, "or", "and became or"), ast.Or: (ast.And, "and", "or became and")}
 
 # Comparisons whose failure usually costs money rather than style points.
 _MONEY_HINTS = ("price", "amount", "total", "cost", "balance", "salary", "tax", "discount",
@@ -208,7 +208,7 @@ class _Mutator:
             _Span(node.lineno, col, left.end_lineno, end_col),
             pad,  # type: ignore[arg-type]
             lead + symbol + trail,
-            f"比较运算符 {original} → {symbol}（{what}）",
+            f"comparison {original} → {symbol} ({what})",
         )
         # A dedicated off-by-one mutant: >= becomes >. This is the single most
         # common real-world defect and the one AI-written tests miss most.
@@ -219,7 +219,7 @@ class _Mutator:
                 _Span(node.lineno, col, left.end_lineno, end_col),
                 pad,  # type: ignore[arg-type]
                 lead + tightened + trail,
-                f"边界值差一：{original} → {tightened}（正好等于阈值时行为改变）",
+                f"off-by-one: {original} → {tightened} (behaviour changes exactly at the threshold)",
             )
 
     def _binop(self, node: ast.BinOp) -> None:
@@ -237,7 +237,7 @@ class _Mutator:
         lead = pad[: len(pad) - len(pad.lstrip())]
         trail = pad[len(pad.rstrip()) :]
         self._add("binop", _Span(node.lineno, col, left.end_lineno, end_col),
-                  pad, lead + symbol + trail, f"算术运算符替换（{what}）")
+                  pad, lead + symbol + trail, f"arithmetic swap ({what})")
 
     def _boolop(self, node: ast.BoolOp) -> None:
         flip = _BOOLOP_FLIP.get(type(node.op))
@@ -251,7 +251,7 @@ class _Mutator:
         replacement = original.replace(f" {keyword} ", f" {symbol} ")
         if replacement == original:
             return
-        self._add("boolop", node, original, replacement, f"布尔连接词替换（{what}）")
+        self._add("boolop", node, original, replacement, f"boolean connective swap ({what})")
 
     def _not(self, node: ast.UnaryOp) -> None:
         inner = node.operand
@@ -261,7 +261,7 @@ class _Mutator:
                          inner.end_col_offset)  # type: ignore[attr-defined]
         if not original.startswith("not "):
             return
-        self._add("not", node, original, inner_src, "取反被移除：条件极性反转")
+        self._add("not", node, original, inner_src, "negation dropped: the polarity of the condition inverts")
 
     def _return_none(self, node: ast.Return) -> None:
         original = _seg(self.source_lines, node.lineno, node.col_offset, node.end_lineno,
@@ -270,20 +270,20 @@ class _Mutator:
             return
         indent = self.source_lines[node.lineno - 1][: node.col_offset]
         self._add("return_none", node, original, f"{indent}return None",
-                  "返回值被丢弃（函数什么都不返回）")
+                  "return value discarded (the function returns nothing)")
 
     def _constant(self, node: ast.Constant) -> None:
         value = node.value
         if isinstance(value, bool):
             self._add("constant", node, _seg(self.source_lines, node.lineno, node.col_offset,
                                              node.end_lineno, node.end_col_offset),  # type: ignore[arg-type]
-                      "False" if value else "True", "布尔常量取反")
+                      "False" if value else "True", "boolean constant flipped")
         elif isinstance(value, (int, float)) and not isinstance(value, bool):
             text = _seg(self.source_lines, node.lineno, node.col_offset,
                         node.end_lineno, node.end_col_offset)  # type: ignore[arg-type]
             if text != str(value):
                 return  # written as an expression (e.g. 1e3, 0x10); skip
-            self._add("constant", node, text, repr(value + 1), "数值常量 +1")
+            self._add("constant", node, text, repr(value + 1), "numeric constant +1")
 
 
 @dataclass(frozen=True)

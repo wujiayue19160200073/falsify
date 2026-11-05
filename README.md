@@ -9,16 +9,16 @@ one-line assertion that closes the hole.
 Zero dependencies. Python 3.9+. Runs on the diff, not the repo.
 
 ```
-  SURVIVED [critical]  M002  boundary  line 14
-    apply_discount  边界值差一：>= → >（正好等于阈值时行为改变）
+  SURVIVED [critical]  M001  boundary  line 14
+    apply_discount  off-by-one: >= → > (behaviour changes exactly at the threshold)
     >=  →  >
 
-    你的测试从没试过这个输入：
+    your tests never tried this input:
       apply_discount(200.0, 0.0, True)
-      原函数  →  180.0
-      变异后  →  200.0
+      original  →  180.0
+      mutant    →  200.0
 
-    补这一行就够了：
+    one line closes it:
       assert apply_discount(200.0, 0.0, True) == 180.0
 ```
 
@@ -70,7 +70,7 @@ space until their behaviour diverges. That input *is* the missing test.
 It also means one assertion often closes several holes at once:
 
 ```
-  6 个存活变异体，补 3 条断言就能全部覆盖。
+  6 survivors, 3 assertions close every one of them.
 ```
 
 ---

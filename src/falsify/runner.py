@@ -92,7 +92,33 @@ def run_command(cmd: Sequence[str], cwd: str, timeout: float) -> tuple[str, str,
         return TIMEOUT, "", time.perf_counter() - started
 
 
-def check_baseline(root: str, cmd: Sequence[str], timeout: float) -> tuple[bool, str]:
+@dataclass
+class Baseline:
+    """What happened when the untouched suite ran.
+
+    ``no_tests`` is kept separate from ``ok`` on purpose. "Your tests fail" and
+    "no runner could find your tests" are different facts, and only one of them
+    is the user's fault. Collapsing them means telling someone their suite is
+    broken when the real cause is a missing pytest, a directory unittest refuses
+    to import, or a test command pointing at the wrong path — and a tool that
+    judges test quality cannot afford to be wrong about that first sentence.
+    """
+
+    ok: bool
+    no_tests: bool = False
+    detail: str = ""
+
+
+# unittest prints "Ran 0 tests", pytest prints "no tests ran" / "collected 0 items".
+_NO_TESTS_MARKERS = ("ran 0 tests", "no tests ran", "collected 0 items", "no tests to run")
+
+
+def collected_nothing(output: str) -> bool:
+    low = output.lower()
+    return any(marker in low for marker in _NO_TESTS_MARKERS)
+
+
+def check_baseline(root: str, cmd: Sequence[str], timeout: float) -> Baseline:
     """The suite must be green before we mutate anything.
 
     Mutating a red suite produces a perfect score and a useless report: every
@@ -100,11 +126,54 @@ def check_baseline(root: str, cmd: Sequence[str], timeout: float) -> tuple[bool,
     """
     status, output, _ = run_command(cmd, root, timeout)
     if status == "pass":
-        return True, ""
+        # A zero collected count is not a pass. unittest exits 0 on some
+        # versions when it discovers nothing, which would score every mutant
+        # as "survived" and report 0% for a suite that never ran.
+        if collected_nothing(output):
+            return Baseline(ok=False, no_tests=True, detail=_tail(output))
+        return Baseline(ok=True)
     if status == TIMEOUT:
-        return False, f"the test suite timed out after {timeout:.0f}s before any mutation"
+        return Baseline(
+            ok=False,
+            detail=f"the test suite timed out after {timeout:.0f}s before any mutation",
+        )
+    if collected_nothing(output):
+        return Baseline(ok=False, no_tests=True, detail=_tail(output))
     detail = _tail(output) or "the test suite exited non-zero without printing anything"
-    return False, detail
+    return Baseline(ok=False, detail=detail)
+
+
+def explain_no_tests(test_files: Sequence[str]) -> str:
+    """Say why nothing was collected, in terms the user can act on."""
+    if not _module_available("pytest") and any(_looks_pytest_style(f) for f in test_files):
+        return (
+            "pytest is not installed for this interpreter, but these tests are "
+            "pytest-style (bare `def test_*` functions), so unittest discovery "
+            "collected none of them.\n"
+            "  Install pytest into the same environment, or pass your own runner:\n"
+            '    falsify run --file <path> --test-cmd "pytest -q"'
+        )
+    if _module_available("pytest") is False:
+        return (
+            "the runner collected zero tests. Neither pytest nor a unittest case "
+            "was found in the matching test files.\n"
+            "  Point falsify at your suite: falsify run --file <path> --test-cmd \"<your test command>\""
+        )
+    return (
+        "the runner collected zero tests, so there is nothing to judge.\n"
+        "  If your tests live in a directory unittest cannot import, add an "
+        "`__init__.py` there, or pass your own command with --test-cmd."
+    )
+
+
+def _looks_pytest_style(path: str) -> bool:
+    """A bare `def test_*` at column zero is pytest; unittest needs a TestCase."""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+    except OSError:
+        return False
+    return "def test_" in text and "unittest.TestCase" not in text
 
 
 def _tail(text: str, limit: int = 2500) -> str:

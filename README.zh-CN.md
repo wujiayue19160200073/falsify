@@ -8,18 +8,21 @@
 零依赖，Python 3.9+，只测这次改动的那几个函数。
 
 ```
-  SURVIVED [critical]  M002  boundary  line 14
-    apply_discount  边界值差一：>= → >（正好等于阈值时行为改变）
+  SURVIVED [critical]  M001  boundary  line 14
+    apply_discount  off-by-one: >= → > (behaviour changes exactly at the threshold)
     >=  →  >
 
-    你的测试从没试过这个输入：
+    your tests never tried this input:
       apply_discount(200.0, 0.0, True)
-      原函数  →  180.0
-      变异后  →  200.0
+      original  →  180.0
+      mutant    →  200.0
 
-    补这一行就够了：
+    one line closes it:
       assert apply_discount(200.0, 0.0, True) == 180.0
 ```
+
+（终端输出是英文的——这个工具面向的是全球开发者，报告要能直接贴进 PR。
+中文文档在这里，输出保持英文。）
 
 上面的输出来自 [`demo/`](demo/)。那个模块行覆盖率接近 100%，测试全绿。
 如果你把一半的计价逻辑反过来，它的测试一条都不会红。
@@ -63,7 +66,7 @@ Thoughtworks 在 2026 年 4 月把变异测试放进 Technology Radar 的 **Tria
 这也意味着一条断言常常能补掉好几个洞：
 
 ```
-  6 个存活变异体，补 3 条断言就能全部覆盖。
+  6 survivors, 3 assertions close every one of them.
 ```
 
 ---
