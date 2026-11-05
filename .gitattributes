@@ -1,0 +1,6 @@
+# Normalise line endings so a Windows checkout and a Linux CI runner behave the
+# same. falsify edits source text byte-by-byte, so \r\n drift would be a real bug.
+* text=auto eol=lf
+
+*.png binary
+*.svg text

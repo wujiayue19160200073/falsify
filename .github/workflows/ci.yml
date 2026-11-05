@@ -1,0 +1,50 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / py${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.9", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Unit tests
+        run: python -m unittest discover -s tests -t tests
+        env:
+          PYTHONPATH: src
+      - name: Smoke test on the demo
+        run: python -m falsify.cli run --file demo/shop.py --max-mutants 6 --witness-limit 3 --no-color
+        env:
+          PYTHONPATH: src
+          NO_COLOR: "1"
+
+  self-check:
+    # Dogfooding: run falsify against falsify. A mutation tester whose own tests
+    # are decorative would be a bad joke, so the score is published on every run.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Mutate the mutation engine
+        run: |
+          python -m falsify.cli run --file src/falsify/mutate.py --function renumber \
+            --max-mutants 10 --no-witness --md >> "$GITHUB_STEP_SUMMARY"
+        env:
+          PYTHONPATH: src
+      - name: Tests still pass afterwards
+        run: python -m unittest discover -s tests -t tests
+        env:
+          PYTHONPATH: src

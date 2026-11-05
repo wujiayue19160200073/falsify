@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "falsify-mutants"
+version = "0.1.0"
+description = "Mutation testing for the code you just changed. Find out which of your tests can actually fail."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "falsify contributors" }]
+keywords = ["mutation-testing", "testing", "ai", "code-review", "ci", "quality"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Testing",
+]
+dependencies = []
+
+[project.scripts]
+falsify = "falsify.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/wujiayue19160200073/falsify"
+Issues = "https://github.com/wujiayue19160200073/falsify/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
